@@ -28,7 +28,7 @@ vector<double> left_arm_joint_velocity;
 // function declarations
 void print_joint_values();
 vector < vector <double> > load_data(string filename);
-void limit_joint_acceleration(double & new_vel, double curr_vel);
+double limit_joint_acceleration(double new_vel, double curr_vel);
 
 void joint_state_callback(const sensor_msgs::JointState & msg)
 {
@@ -92,8 +92,13 @@ int main(int argc, char **argv) {
   vector< vector<double> > traj = load_data(traj_filename);
 
   // initialize the gripper open/close
-  cmd.data = traj[0][GRIPPER_INDEX];
+  if (traj[0][GRIPPER_INDEX]>0)
+    cmd.data = 10.0;
+  else
+    cmd.data = 0.0;
   r_gripper_pub.publish(cmd);
+
+  cout << "initial gripper command sent" << endl;
 
   // move to the initial joint position
   bool all_fine = false;
@@ -103,7 +108,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < 7; i++)
     {
       cmd.data = 2.0*(traj[0][i+JOINT_POS_INDEX]-right_arm_joint_positions[i]);
-      limit_joint_acceleration(cmd.data, right_arm_joint_positions[i]);
+      cmd.data = limit_joint_acceleration(cmd.data, right_arm_joint_velocity[i]);
       r_velocity_command_pub[i].publish(cmd);
       if(abs(traj[0][i+JOINT_POS_INDEX]-right_arm_joint_positions[i])>0.005)
         all_fine = false;
@@ -132,9 +137,15 @@ int main(int argc, char **argv) {
       {
         cmd.data = 0.1*(traj[timestep_counter][i+JOINT_POS_INDEX]-right_arm_joint_positions[i]);  // feedback term
         cmd.data += 1.0*traj[timestep_counter][i+JOINT_VEL_INDEX];                                // feedforward term
-        limit_joint_acceleration(cmd.data, right_arm_joint_positions[i]);
+        cmd.data = limit_joint_acceleration(cmd.data, right_arm_joint_velocity[i]);
         r_velocity_command_pub[i].publish(cmd);
       }
+      if (traj[timestep_counter][GRIPPER_INDEX]>0)
+        cmd.data = 10.0;
+      else
+        cmd.data = 0.0;
+      r_gripper_pub.publish(cmd);
+      
       timestep_counter++;
       if (timestep_counter >= traj.size())
       {
@@ -153,7 +164,7 @@ int main(int argc, char **argv) {
   r_gripper_pub.publish(cmd);
   l_gripper_pub.publish(cmd);
 
-  std::cout << "Program done!" << std::endl;
+  std::cout << "Program done!!!" << std::endl;
   return 0;
 }
 
@@ -204,11 +215,13 @@ vector < vector <double> > load_data(string filename)
   return data;
 }
 
-void limit_joint_acceleration(double & new_vel, double curr_vel)
+double limit_joint_acceleration(double new_vel, double curr_vel)
 {
+  double cmd = new_vel;
   const double acc_threshold = 0.06;
   if((new_vel - curr_vel) > acc_threshold)
-    new_vel = acc_threshold;
+    cmd = acc_threshold;
   else if((new_vel - curr_vel) < (-acc_threshold))
-    new_vel = -acc_threshold;
+    cmd = -acc_threshold;
+  return cmd;
 }

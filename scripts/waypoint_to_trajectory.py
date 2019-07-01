@@ -44,7 +44,8 @@ plt.plot(sampling_time, traj_gripper)
 plt.plot(time_waypoints, (waypoints[:,7]-0.5)*10.0, '*')
 plt.show()
 
-traj = np.append(traj_jpos, traj_jvel, axis = 1)
+traj = np.append(sampling_time.reshape(nsamples,1), traj_jpos, axis = 1)
+traj = np.append(traj, traj_jvel, axis = 1)
 traj = np.append(traj, traj_gripper.reshape(nsamples,1), axis = 1)
 
 np.save('traj.npy', traj)
