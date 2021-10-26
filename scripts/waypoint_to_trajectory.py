@@ -27,17 +27,17 @@ traj_jvel = np.zeros((nsamples,7))
 traj_gripper = np.zeros((nsamples,1))
 
 for j in range(7):
-    tck = interpolate.CubicSpline(time_waypoints, waypoints[:,j])
+    tck = interpolate.CubicSpline(time_waypoints, waypoints[:,j],bc_type='clamped')
     traj_jpos[:, j] = tck(sampling_time)
     traj_jvel[:, j] = tck(sampling_time,1)
 
     plt.subplot(311)
-    plt.plot(sampling_time, traj_jpos[:,j])
-    plt.plot(time_waypoints, waypoints[:,j], '*')
+    plt.plot(sampling_time, traj_jpos[:,j],'-*')
+    #plt.plot(time_waypoints, waypoints[:,j], '*')
     plt.subplot(312)
     plt.plot(sampling_time, traj_jvel[:,j])
 
-tck = interpolate.CubicSpline(time_waypoints, (waypoints[:,7]-0.5)*10.0, bc_type='natural')
+tck = interpolate.CubicSpline(time_waypoints, (waypoints[:,7]-0.5)*10.0, bc_type='periodic')
 traj_gripper = tck(sampling_time)
 plt.subplot(313)
 plt.plot(sampling_time, traj_gripper)

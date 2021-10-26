@@ -29,6 +29,7 @@ vector<double> left_arm_joint_velocity;
 void print_joint_values();
 vector < vector <double> > load_data(string filename);
 double limit_joint_acceleration(double new_vel, double curr_vel);
+double limit_joint_positions(int joint, double vel, double curr_position);
 
 void joint_state_callback(const sensor_msgs::JointState & msg)
 {
@@ -107,10 +108,11 @@ int main(int argc, char **argv) {
     all_fine = true;
     for (int i = 0; i < 7; i++)
     {
-      cmd.data = 2.0*(traj[0][i+JOINT_POS_INDEX]-right_arm_joint_positions[i]);
+      cmd.data = 0.5*(traj[0][i+JOINT_POS_INDEX]-right_arm_joint_positions[i]);
       cmd.data = limit_joint_acceleration(cmd.data, right_arm_joint_velocity[i]);
+      cmd.data = limit_joint_positions(i, cmd.data, right_arm_joint_positions[i]);
       r_velocity_command_pub[i].publish(cmd);
-      if(abs(traj[0][i+JOINT_POS_INDEX]-right_arm_joint_positions[i])>0.005)
+      if(abs(traj[0][i+JOINT_POS_INDEX]-right_arm_joint_positions[i])>0.05)
         all_fine = false;
     }
     usleep(50000);
@@ -135,9 +137,10 @@ int main(int argc, char **argv) {
     {
       for (int i = 0; i < 7; i++)
       {
-        cmd.data = 0.1*(traj[timestep_counter][i+JOINT_POS_INDEX]-right_arm_joint_positions[i]);  // feedback term
-        cmd.data += 1.0*traj[timestep_counter][i+JOINT_VEL_INDEX];                                // feedforward term
+        cmd.data = 1.0*(traj[timestep_counter][i+JOINT_POS_INDEX]-right_arm_joint_positions[i]);  // feedback term
+        //cmd.data += 1.0*traj[timestep_counter][i+JOINT_VEL_INDEX];                                // feedforward term
         cmd.data = limit_joint_acceleration(cmd.data, right_arm_joint_velocity[i]);
+        cmd.data = limit_joint_positions(i, cmd.data, right_arm_joint_positions[i]);
         r_velocity_command_pub[i].publish(cmd);
       }
       if (traj[timestep_counter][GRIPPER_INDEX]>0)
@@ -145,7 +148,7 @@ int main(int argc, char **argv) {
       else
         cmd.data = 0.0;
       r_gripper_pub.publish(cmd);
-      
+
       timestep_counter++;
       if (timestep_counter >= traj.size())
       {
@@ -215,13 +218,38 @@ vector < vector <double> > load_data(string filename)
   return data;
 }
 
+double limit_joint_positions(int joint, double vel, double curr_position)
+{
+  return vel;
+  double thr = 0.2;
+  double limits_high[7] = {2.94, 0.759, 2.94,   1.39 , 5.06, 2.41, 3.996};
+  double limits_low[7]  = {-2.94,-2.5, -2.94, -2.155,-5.06,-1.53,-3.966};
+  if (curr_position > (limits_high[joint]-thr) && vel > 0)
+  {
+    cout << "limiting joint position! jpos: " << curr_position << " , limit: " << limits_high[joint] << endl;
+    return -0.01;
+  }
+  if (curr_position < (limits_low[joint]+thr) && vel < 0)
+  {
+    cout << "limiting joint position! jpos: " << curr_position << " , limit: " << limits_low[joint] << endl;
+    return 0.01;
+  }
+  return vel;
+}
+
 double limit_joint_acceleration(double new_vel, double curr_vel)
 {
   double cmd = new_vel;
-  const double acc_threshold = 0.06;
+  const double acc_threshold = 1.0;
   if((new_vel - curr_vel) > acc_threshold)
-    cmd = acc_threshold;
+  {
+    cout << "acc limited! acc: " << (new_vel - curr_vel) << endl;
+    cmd = acc_threshold + curr_vel;
+  }
   else if((new_vel - curr_vel) < (-acc_threshold))
-    cmd = -acc_threshold;
+  {
+    cout << "acc limited! acc: " << (new_vel - curr_vel) << endl;
+    cmd = -acc_threshold + curr_vel;
+  }
   return cmd;
 }
